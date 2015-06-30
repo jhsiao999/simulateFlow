@@ -8,7 +8,7 @@
 ###                                                                      ###
 ### Law et al. "Mapping cell populations in flow cytometry               ###
 ### data for cross-sample comparison using the Friedman-Rafsky test      ###
-### statistic as a distance measure", Cytometry A, 2015.                 ###
+### statistic as a distance measure", Cytometry Part A, 2015.            ###
 ###                                                                      ###
 ############################################################################
 ############################################################################
