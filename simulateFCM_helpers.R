@@ -6,7 +6,7 @@
 ### flowMap-FR under scenaiors of biological and technical               ###
 ### variations. The evaluation results are preseneted in                 ###             ###                                                                      ###
 ###                                                                      ###
-### Law et al. "Mapping cell populations in flow cytometry               ###
+### Hsiao et al. "Mapping cell populations in flow cytometry               ###
 ### data for cross-sample comparison using the Friedman-Rafsky test      ###
 ### statistic as a distance measure", Cytometry Part A, 2015.            ###
 ###                                                                      ###
