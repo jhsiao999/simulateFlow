@@ -1,0 +1,361 @@
+---
+title: "Sanity-check NestedVar function"
+output: 
+    html_document:
+        toc: true
+author: Joyce Hsiao
+date: "2015-10-29"
+---
+
+
+## Objective
+
+Raunak Mundada working with Monnie McGee ran into an error message while simulating cell populations....
+
+
+## Raunak's code
+
+Copied from our correspondence.
+
+```{r, eval = FALSE}
+> rm(list=ls(all=T))
+
+> source('F:/SMU_Courses/ResearchWork/flowMap_1.6.0/flowCytometry/simulateFCM_helpers.R')
+
+> source('F:/SMU_Courses/ResearchWork/flowMap_1.6.0/flowCytometry/simulateFCM.R')
+
+> library(parallel)
+
+> library(doParallel)
+
+> library(flowMap)
+
+> ref_id <- 7 # id of the reference sample
+
+> sim_id <- 8 # id of the cell population that is to be simulated
+
+> sam1 <- realData #read from sample7.txt
+
+> temp <- make.propcase(id = sim_id,simulatedata = realData,sampleMethod = "proportional",samToMatch = 3)
+```
+
+
+
+## Trial run
+
+Load packages.
+
+```{r}
+require(flowMap)
+require(sn)
+require(MBESS)
+```
+
+Import helper functions.
+
+```{r}
+dir <- "~/Dropbox/GitHub/simulateFlow/"
+source(file.path(dir, "simulateFCM_helpers.R"))
+```
+
+Import the real FCM data used in the paper for simulation.
+
+```{r}
+## Import a real flow cytometry data set
+realData <- read.table(file.path(dir, "sample7.txt"), sep="\t", header=TRUE)
+```
+
+Include 4 marker channels: CD14, CD23, CD3, and CD19, as well as the cell population identifying label
+
+```{r}
+realData <- realData[,c(1:4,6)]
+colnames(realData)[5] <- "id"
+```
+
+Recode cell population ID numbers to a sequence of  1 to 9
+
+```{r}
+iiChange <- realData$id > 5
+realData$id[iiChange] <- realData$id[iiChange] - 1
+```
+
+Parameter settings (see Supplemental information)
+
+```{r}
+## Specificy mean and covariance parameters of each 
+## cell populations. These parameters are also described
+## in the paper. 
+
+# CP1 covariance
+covarr_pop1 <- .8*cov( realData[realData$id==1,1:4] )
+
+# CP2 covariance
+covarr_pop2 <- matrix(c(3500,0,0,0,0,18000,0,0,0,0,
+                        6100,0,0,0,0,1200), 
+                      nrow = 4, ncol = 4, byrow = FALSE)
+
+# CP3 covariance
+rho12 = 0.9
+rho13 = 0.9
+rho14 = 0.2
+rho23 = 0.7
+rho24 = 0.2
+rho34 = 0.2
+corrmat <- matrix(c(1,rho12,rho13,rho14,rho12,1,rho23,
+	rho24,rho13,rho23,1,rho34,rho14,rho24,rho34,1), 4, 4)
+covarr_pop3 <- cor2cov(corrmat, sd=.4*c(sqrt(3862),
+		sqrt(2627),sqrt(4672),sqrt(9948)))
+
+# CP4 covariance
+covarr_pop4 <- cov( realData[realData$id==4,1:4] )
+
+# CP5 covariance
+rho12 = -0.1
+rho13 = -.2
+rho14 = .1
+rho23 = 0.2
+rho24 = -0.2
+rho34 = -0.2
+corrmat <- matrix(c(1,rho12,rho13,rho14,rho12,1,rho23,
+                    rho24,rho13,rho23,1,rho34,rho14,rho24,rho34,1),4,4)
+covarr_pop5 <- cor2cov(corrmat, sd=.4*c(sqrt(2300),sqrt(2700),
+                                        sqrt(2300),sqrt(2600)))
+# CP6 covariance
+covarr_pop6 <- cov( realData[realData$id==6,1:4] )
+
+# CP7 covariance
+covarr_pop7 <- cov( realData[realData$id==7,1:4] )
+
+# CP8 covariance
+rho12 = .6
+rho13 = .6
+rho14 = .3
+rho23 = .6
+rho24 = .3
+rho34 = .3
+corrmat <- matrix(c(1,rho12,rho13,rho14,rho12,1,rho23,
+	rho24,rho13,rho23,1,rho34,rho14,rho24,rho34,1),4,4)
+covarr_pop8 <- cor2cov(corrmat, sd=.4*c(sqrt(2440),sqrt(2080),
+	sqrt(2552),sqrt(1606)))
+
+# CP9 covariance
+rho12 = .6
+rho13 = .5
+rho14 = .5
+rho23 = .7
+rho24 = .4
+rho34 = .4
+corrmat <- matrix(c(1,rho12,rho13,rho14,rho12,1,rho23,
+                    rho24,rho13,rho23,1,rho34,rho14,rho24,rho34,1),4,4)
+covarr_pop9 <- cor2cov(corrmat, sd=.4*c(sqrt(9444),
+                                        sqrt(12856),sqrt(9483),sqrt(5423)))
+
+
+## Coerce the cell population paramters of mean, covariance, and skewness 
+## into a list object 
+
+CP1 <- list(xi = c(113,129,190,300),
+		Omega = covarr_pop1,
+		alpha = c(0,0,0,-4),df = 1 )
+CP2 <- list(xi = c(68,585,95,497), 
+		Omega = covarr_pop2, 
+		alpha = c(0,-2.5,0,0), df = 3 )
+CP3 <- list(xi = c(392,464,416,563), 
+            Omega = covarr_pop3, 
+            alpha = c(0,0,0,0), df = 3 )
+CP4 <- list(xi = c(214,277,270,240), 
+		Omega = .7*covarr_pop4, 
+		alpha = c(0,0,-7,0), df = 3 )
+CP5 <- list(xi = c(186,248,252,276), 
+            Omega = covarr_pop5, 
+            alpha = c(0,0,0,3), df = 2.5 )
+CP6 <- list(xi = c(670,191,218,262), 
+		Omega = .8*covarr_pop6, 
+		alpha = c(-6,0,0,1.5), df = 3 )
+CP7 <- list(xi = c(98,157,650,260), 
+		Omega = .5*covarr_pop7, 
+		alpha = c(0,-1,-8,-2), df = 3 )
+CP8 <- list(xi = c(238,303,290,293), 
+		Omega = covarr_pop8, 
+		alpha = c(3,3,2,2), df = 3 )
+CP9 <- list(xi = c(530,592,496,412), 
+            Omega = 2*covarr_pop9, 
+            alpha = c(0,0,0,0), df = 4 )
+
+paramlist <- list(CP1,CP2,CP3,CP4,CP5,CP6,CP7,CP8,CP9)
+```
+
+*Beginning of Raunak's test.
+
+Select the populations of interest.
+
+```{r}
+ref_id <- 7 # id of the reference sample
+sim_id <- 8 # id of the cell population that is to be simulated
+sam1 <- realData #read from sample7.txt
+```
+
+
+```{r}
+temp <- make.propcase(id = sim_id,
+                      simulatedata = realData,
+                      sampleMethod = "proportional",
+                      samToMatch = 3)
+```
+
+So the debugging begins...
+
+```{r}
+id = sim_id
+simulatedata = realData
+sampleMethod = "proportional"
+samToMatch = 3
+
+# Specificy proportions of interest
+prop_list <- c(1, 10, seq(25, 150, 25) )/ 100
+
+# Convert proportions to counts
+simprops <- round( 100*table(simulatedata$id)[id]*prop_list/
+                     length(simulatedata$id[id]), 2)
+
+propcase <- simSam2(pop = id, param = simprops/100, sam1=simulatedata,
+                    xi = paramlist[[id]]$xi, Omega = paramlist[[id]]$Omega, 
+                    alpha = paramlist[[id]]$alpha, df = paramlist[[id]]$df) 
+```
+
+Debug simSam2().
+
+```{r}
+pop = id
+param = simprops/100
+sam1 = simulatedata
+xi = paramlist[[id]]$xi
+Omega = paramlist[[id]]$Omega
+alpha = paramlist[[id]]$alpha
+df = paramlist[[id]]$df
+
+#simSam2 <- function(pop,param,sam1,xi,Omega,alpha,df) {
+  
+  tempmat <- sam1[sam1$id!=pop,]
+  nn <- nrow(sam1)
+  
+  sam2 <- lapply(1:length(param),function(i) {
+
+    nsam <- round(param[i])	
+    if (nsam==0) {
+      tempmat
+    } else if (nsam > 0) {
+      mat <- simOnePop(n=nsam, xi=xi, Omega=Omega, 
+                       alpha=alpha, df=df)
+#       mat$id <- rep(pop, nsam)
+#       colnames(mat)[1:4] <- colnames(tempmat)[1:4]
+#       rbind(mat, tempmat)
+    }
+  })
+  # return(sam2)
+# }
+```
+
+Debug simOnePop()
+
+```{r}
+n = nsam
+nn = n
+#simOnePop <- function(nn,xi,Omega,alpha,df) {
+  
+rsam <- rmst_ed(n = nn,xi = xi,Omega=Omega,alpha=alpha, df=df)
+# IIout <- rowSums(rsam<0 | rsam>1000) >0
+# rsam <- rsam[!IIout,]
+# nn <- sum(IIout)
+#   while(nn > 0) {
+#     temp <- rmst_ed(n=nn,xi = xi,Omega=Omega,alpha=alpha,df=df)
+#     IIout <- rowSums(temp<0 | temp>1000) >0
+#     rsam2 <- temp[!IIout,]
+#     nn <- sum(IIout)
+#     rsam <- rbind(rsam,rsam2)
+#   }
+#   rsam <- data.frame(rsam,check.names=F,row.names=NULL)
+#   return(rsam)	
+# }
+
+```
+
+
+Debug rmst_ed().
+
+```{r}
+n = nn
+xi = xi
+Omega = Omega
+alpha = alpha
+df=df
+dp = NULL
+# rmst_ed <- function(n = 1, 
+#                     xi=rep(0,length(alpha)), 
+#                     Omega, alpha, df=Inf, dp=NULL)
+# { 
+#   if(!(missing(alpha) & missing(Omega)) && !is.null(dp)) 
+#     stop("You cannot set both component parameters and dp")
+#   if(!is.null(dp)){
+#     if(!is.null(dp$xi)) xi <- dp$xi
+#     else
+#       if(!is.null(dp$beta)) xi <- as.vector(dp$beta)
+#       Omega <- dp$Omega
+#       alpha <- dp$alpha
+#       df <- dp$df
+#   }  
+  d <- length(alpha)
+  x <- if(df==Inf) 1 else rchisq(n,df)/df
+  z <- rmsn(n, rep(0,d), Omega, alpha)
+  # y <- sweep(z/sqrt(x),2, STAT=xi, FUN="+")
+  # y <- t(xi+ t(z/sqrt(x)))
+  # attr(y,"parameters") <- list(xi=xi, Omega=Omega, alpha=alpha, df=df)
+  # return(y)
+# }
+```
+
+
+Debug rmsn()
+
+```{r}
+n = n
+x = rep(0,d)
+tau = 0
+dp = NULL
+# function (n = 1, xi = rep(0, length(alpha)), Omega, alpha, tau = 0, 
+#     dp = NULL) 
+# {
+#     if (!is.null(dp)) {
+#         dp0 <- dp
+#         dp0$nu <- NULL
+#         if (is.null(dp0$tau)) 
+#             dp0$tau <- 0
+#     }
+#    else 
+      dp0 <- list(xi = xi, Omega = Omega, alpha = alpha, tau = tau)
+
+    if (any(abs(dp0$alpha) == Inf)) 
+#         stop("Inf's in alpha are not allowed")
+    lot <- dp2cpMv(dp = dp0, family = "SN", aux = TRUE)
+    d <- length(dp0$alpha)
+    y <- matrix(rnorm(n * d), n, d) %*% chol(lot$aux$Psi)
+    if (dp0$tau == 0) 
+        truncN <- abs(rnorm(n))
+#    else truncN <- qnorm(runif(n, min = pnorm(-dp0$tau), max = 1))
+    truncN <- matrix(rep(truncN, d), ncol = d)
+    delta <- lot$aux$delta
+    z <- delta * t(truncN) + sqrt(1 - delta^2) * t(y)
+    y <- t(dp0$xi + lot$aux$omega * z)
+    attr(y, "family") <- "SN"
+    attr(y, "parameters") <- dp0
+    return(y)
+}
+```
+
+
+## Session information
+
+```{r}
+sessionInfo()
+```
+
